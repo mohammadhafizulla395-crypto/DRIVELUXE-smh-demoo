@@ -11,6 +11,7 @@
     "postinstall": "node scripts/sync-db-provider.js && prisma generate",
     "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
+    "db:seed": "bun run prisma/seed.ts",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
     "db:deploy": "prisma migrate deploy"
