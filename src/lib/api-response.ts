@@ -59,6 +59,21 @@ export function handleError(err: unknown) {
     return fail('Please check the highlighted fields and try again.', 400, fields)
   }
 
+  // Database unreachable / failed to initialize (e.g. serverless SQLite file
+  // cannot be opened, or the Postgres connection string is missing/wrong).
+  // Surface a clear, operational message instead of a generic 500.
+  const connCodes = new Set(['P1001', 'P1002', 'P1008', 'P2023'])
+  if (
+    err instanceof Prisma.PrismaClientInitializationError ||
+    (err instanceof Prisma.PrismaClientKnownRequestError && connCodes.has(err.code))
+  ) {
+    console.error('[DB unavailable]', err instanceof Error ? err.message : err)
+    return fail(
+      'We could not reach the database. Please try again in a moment.',
+      503,
+    )
+  }
+
   // Prisma known errors
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === 'P2025') {

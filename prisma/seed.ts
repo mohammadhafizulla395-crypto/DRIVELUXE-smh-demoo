@@ -1,5 +1,5 @@
 import { db } from '../src/lib/db'
-import bcrypt from 'bcryptjs'
+import bcrypt from 'bcrypt'
 
 /**
  * Seed script for DriveLuxe.
