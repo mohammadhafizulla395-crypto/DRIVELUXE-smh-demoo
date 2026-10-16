@@ -16,10 +16,8 @@ generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL") // file:./dev.db — local, no server to reach
-}
+// Hardcoded authentication - no database dependency
+// All user data is stored in memory with 5 pre-defined accounts
 
 /* ============================= CUSTOMER ============================= */
 

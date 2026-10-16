@@ -1,14 +1,11 @@
-import bcrypt from 'bcrypt'
+// Hardcoded authentication - no database dependency
+// 5 pre-defined user accounts: 1 admin, 2 users, 2 sellers
 import jwt from 'jsonwebtoken'
 import { cookies } from 'next/headers'
-import { db } from './db'
-import type { UserRole, AuthEmployee as AuthEmployeeType } from '@/types'
 
 const COOKIE_NAME = 'driveluxe_token'
-const EMPLOYEE_COOKIE_NAME = 'driveluxe_employee_token'
 const TOKEN_TTL_DAYS = 7
 
-// In production, a missing JWT_SECRET must fail loudly. In dev, fall back.
 export const JWT_SECRET = (() => {
   const secret = process.env.JWT_SECRET
   if (!secret) {
@@ -24,38 +21,78 @@ export const JWT_SECRET = (() => {
 
 export interface JwtPayload {
   userId: string
-  role: UserRole
-}
-
-// Employee JWT payload — separate session, separate cookie
-export interface EmployeeJwtPayload {
-  employeeId: string // internal db id
-  employeeCode: string // EMP-XXXX
-  role: string // support | fleet | customer_care
+  role: 'admin' | 'user' | 'seller'
 }
 
 export interface AuthUser {
   id: string
   name: string
   email: string
-  role: UserRole
+  role: 'admin' | 'user' | 'seller'
   phone: string | null
   points: number
 }
 
-export type AuthEmployee = AuthEmployeeType
+// Hardcoded 5 user accounts - no database needed
+const HARDCODED_USERS: AuthUser[] = [
+  {
+    id: '1',
+    email: 'admin@driveluxe.com',
+    password: 'admin123',
+    name: 'Admin User',
+    role: 'admin',
+    phone: null,
+    points: 0,
+  },
+  {
+    id: '2',
+    email: 'user1@driveluxe.com',
+    password: 'user1234',
+    name: 'User One',
+    role: 'user',
+    phone: null,
+    points: 0,
+  },
+  {
+    id: '3',
+    email: 'user2@driveluxe.com',
+    password: '5678',
+    name: 'User Two',
+    role: 'user',
+    phone: null,
+    points: 0,
+  },
+  {
+    id: '4',
+    email: 'seller1@driveluxe.com',
+    password: 'seller123',
+    name: 'Seller One',
+    role: 'seller',
+    phone: null,
+    points: 0,
+  },
+  {
+    id: '5',
+    email: 'seller2@driveluxe.com',
+    password: 'sel456',
+    name: 'Seller Two',
+    role: 'seller',
+    phone: null,
+    points: 0,
+  },
+]
 
 /* ------------------------------ password ------------------------------ */
 
 export async function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, 10)
+  return plain // No hashing needed for hardcoded accounts
 }
 
 export async function verifyPassword(
   plain: string,
   hash: string,
 ): Promise<boolean> {
-  return bcrypt.compare(plain, hash)
+  return plain === hash
 }
 
 /* --------------------------------- jwt -------------------------------- */
@@ -64,26 +101,9 @@ export function signToken(payload: JwtPayload): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: `${TOKEN_TTL_DAYS}d` })
 }
 
-export function signEmployeeToken(payload: EmployeeJwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: `${TOKEN_TTL_DAYS}d` })
-}
-
 export function verifyToken(token: string): JwtPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { employeeId?: string }
-    // Employee tokens must not be accepted as user tokens
-    if (decoded.employeeId) return null
-    return decoded
-  } catch {
-    return null
-  }
-}
-
-export function verifyEmployeeToken(token: string): EmployeeJwtPayload | null {
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as EmployeeJwtPayload & { userId?: string }
-    if (!decoded.employeeId) return null
-    return decoded
+    return jwt.verify(token, JWT_SECRET) as JwtPayload
   } catch {
     return null
   }
@@ -103,26 +123,9 @@ export async function setAuthCookie(token: string) {
   })
 }
 
-export async function setEmployeeCookie(token: string) {
-  const expires = new Date(Date.now() + TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000)
-  const store = await cookies()
-  store.set(EMPLOYEE_COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    expires,
-  })
-}
-
 export async function clearAuthCookie() {
   const store = await cookies()
   store.delete(COOKIE_NAME)
-}
-
-export async function clearEmployeeCookie() {
-  const store = await cookies()
-  store.delete(EMPLOYEE_COOKIE_NAME)
 }
 
 export async function getTokenFromCookie(): Promise<string | undefined> {
@@ -130,62 +133,24 @@ export async function getTokenFromCookie(): Promise<string | undefined> {
   return store.get(COOKIE_NAME)?.value
 }
 
-export async function getEmployeeTokenFromCookie(): Promise<string | undefined> {
-  const store = await cookies()
-  return store.get(EMPLOYEE_COOKIE_NAME)?.value
-}
-
 /* ------------------------- request helpers ---------------------------- */
 
-/**
- * Reads the JWT from the httpOnly cookie, verifies it, and returns the user.
- * Returns null when unauthenticated / token invalid.
- */
+export async function authenticateUser(
+  email: string,
+  password: string,
+): Promise<AuthUser | null> {
+  const user = HARDCODED_USERS.find(
+    (u) => u.email === email && u.password === password,
+  )
+  if (!user) return null
+  return user
+}
+
 export async function getUserFromRequest(): Promise<AuthUser | null> {
   const token = await getTokenFromCookie()
   if (!token) return null
   const payload = verifyToken(token)
   if (!payload) return null
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      phone: true,
-      points: true,
-    },
-  })
-  return user as AuthUser | null
-}
-
-/**
- * Reads the employee JWT from its separate cookie, verifies it, returns the employee.
- * Returns null when unauthenticated / token invalid / employee suspended.
- */
-export async function getEmployeeFromRequest(): Promise<AuthEmployee | null> {
-  const token = await getEmployeeTokenFromCookie()
-  if (!token) return null
-  const payload = verifyEmployeeToken(token)
-  if (!payload) return null
-  const emp = await db.employee.findUnique({
-    where: { id: payload.employeeId },
-    select: {
-      id: true,
-      employeeId: true,
-      name: true,
-      email: true,
-      phone: true,
-      role: true,
-      status: true,
-      ticketsResolved: true,
-      avgResponseMin: true,
-      customerRating: true,
-    },
-  })
-  if (!emp) return null
-  // Suspended employees cannot use the portal
-  if (emp.status === 'suspended') return null
-  return emp as unknown as AuthEmployee
+  const user = HARDCODED_USERS.find((u) => u.id === payload.userId)
+  return user ?? null
 }
