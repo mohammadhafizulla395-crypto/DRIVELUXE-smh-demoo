@@ -16,8 +16,28 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Hardcoded authentication - no database dependency
-// All user data is stored in memory with 5 pre-defined accounts
+// DriveLuxe — Premium Car Rental Platform
+// Prisma schema (local SQLite — fully offline, no external DB connection).
+// Lists stored as comma-separated strings.
+//
+// NOTE: The Supabase credentials in .env.supabase.bak are dead (the project
+// ref no longer resolves). To go back to Postgres: restore .env.supabase.bak
+// as .env, flip `provider` below back to "postgresql", re-add `directUrl`,
+// then run `bunx prisma migrate deploy` + seed.
+//
+// Three independent portals:
+//   1. Customer  (User with role=user)   — books cars, writes reviews, earns points
+//   2. Employee  (Employee model)        — handles tickets, assists bookings, recommends reviews
+//   3. Admin     (User with role=admin)  — manages everything, 3-step login (email+password+PIN)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL") // file:./dev.db — local, no server to reach
+}
 
 /* ============================= CUSTOMER ============================= */
 
